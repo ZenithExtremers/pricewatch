@@ -1,13 +1,21 @@
 {
-  "_説明": "見張る商品のリスト。url はお店の商品ページ。target（目標価格）は空でもOK。下がったら必ず通知、target 以下になったら強めに通知する。",
+  "_説明": "見張る商品のリスト。url はお店の商品ページ。お店のサイトが直接読めないときは、価格.comのページを url にして kakaku_shop に価格.com上の店名を書く（link は通知から開くページ）。target（目標価格）以下になると強めに通知。",
   "items": [
     {
       "id": "ipad-air-m4-11-128",
       "name": "iPad Air (M4) 11インチ 128GB Wi-Fi",
       "target": 110000,
       "shops": [
-        {"shop": "ケーズデンキ", "url": "https://www.ksdenki.com/shop/g/g4549995661996/"},
-        {"shop": "価格.com最安", "url": "https://kakaku.com/item/J0000050037/"}
+        {
+          "shop": "ケーズデンキ",
+          "url": "https://kakaku.com/item/K0001771906/",
+          "kakaku_shop": "ケーズデンキWEB",
+          "link": "https://www.ksdenki.com/shop/g/g4549995661996/"
+        },
+        {
+          "shop": "価格.com最安",
+          "url": "https://kakaku.com/item/J0000050037/"
+        }
       ]
     }
   ]

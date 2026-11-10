@@ -28,8 +28,11 @@ def text_of(html):
     return re.sub(r"\s+", " ", t)
 
 
-def parse_price(url, html):
+def parse_price(url, html, kakaku_shop=None):
     """お店ごとの書き方 → 構造化データ の順で価格を探す。"""
+    if kakaku_shop:  # 価格.comのページに載っている、特定のお店の価格
+        m = re.search(r"shpbid:(\d+),shpkey:\d+,shpname:'" + re.escape(kakaku_shop) + "'", html)
+        return to_int(m.group(1)) if m else None
     t = text_of(html)
     if "ksdenki.com" in url:
         m = re.search(r"Web価格\s*([\d,]{4,})\s*円", t)
@@ -51,11 +54,17 @@ def parse_price(url, html):
     return to_int(m.group(1)) if m else None
 
 
+_cache = {}
+
+
 def fetch(url):
+    if url in _cache:
+        return _cache[url]
     r = requests.get(url, headers={"User-Agent": UA, "Accept-Language": "ja,en;q=0.8"}, timeout=30)
     r.raise_for_status()
     if not r.encoding or r.encoding.lower() in ("iso-8859-1", "ascii"):
         r.encoding = r.apparent_encoding
+    _cache[url] = r.text
     return r.text
 
 
@@ -92,9 +101,9 @@ def main():
             rec = h.setdefault(s["shop"], [])
             price, err = None, None
             try:
-                price = parse_price(s["url"], fetch(s["url"]))
+                price = parse_price(s["url"], fetch(s["url"]), s.get("kakaku_shop"))
                 if price is None:
-                    err = "価格が見つからない（ページの形が変わったかも）"
+                    err = "価格が見つからない（ページの形が変わったか、掲載が止まったかも）"
             except Exception as e:
                 err = f"取得失敗: {type(e).__name__}"
             time.sleep(2)
@@ -111,12 +120,12 @@ def main():
                     notify(f"{'🎯目標到達！' if hit else '値下げ'} {it['name']}",
                            f"{s['shop']}: {yen(prev)} → {yen(price)}（-{yen(prev - price)}）"
                            + ("\n過去最安！" if low is None or price < low else ""),
-                           high=hit, url=s["url"])
+                           high=hit, url=s.get("link", s["url"]))
                 elif prev is not None and price > prev:
                     print(f"値上げ {s['shop']}: {prev} → {price}")
             else:
                 print(f"{it['name']} / {s['shop']}: {err}")
-            shops_out.append({"shop": s["shop"], "url": s["url"], "price": price, "error": err,
+            shops_out.append({"shop": s["shop"], "url": s.get("link", s["url"]), "price": price, "error": err,
                               "history": rec})
         hp.write_text(json.dumps(h, ensure_ascii=False, indent=1), encoding="utf-8")
         summary.append({"id": it["id"], "name": it["name"], "target": it.get("target"),
