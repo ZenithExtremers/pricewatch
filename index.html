@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#b23a48">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PriceWatch">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>PriceWatch</title>
+<style>
+:root{--main:#b23a48;--bg:#f4f3f1;--card:#fff;--text:#1d1b1a;--sub:#6d6763;--line:#e6e2de;--down:#1e7a46;--up:#c0392b;--goal:#d4a017}
+@media (prefers-color-scheme:dark){:root{--bg:#131111;--card:#1e1b1a;--text:#efebe8;--sub:#a59d98;--line:#332e2c}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--main);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:8px}
+h1{font-size:18px;margin:0;flex:1}
+.upd{font-size:12px;opacity:.85}
+.btn{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:10px;width:40px;height:40px;font-size:18px}
+main{max-width:680px;margin:0 auto;padding:12px 12px calc(40px + env(safe-area-inset-bottom))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.name{font-weight:700;font-size:16px;margin-bottom:4px}
+.best{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.big{font-size:30px;font-weight:800;letter-spacing:-.5px}
+.tag{font-size:12px;padding:2px 8px;border-radius:999px;font-weight:700;background:var(--line);color:var(--sub)}
+.tag.goal{background:var(--goal);color:#fff}
+.sub{color:var(--sub);font-size:13px}
+.shop{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit}
+.shop:first-of-type{margin-top:10px}
+.sn{flex:1;font-size:14px}
+.sp{font-weight:700;font-variant-numeric:tabular-nums}
+.d{font-size:12px;font-weight:700;min-width:64px;text-align:right}
+.d.down{color:var(--down)}.d.up{color:var(--up)}
+.err{color:var(--up);font-size:12px}
+svg{width:100%;height:90px;display:block;margin-top:8px}
+.empty{text-align:center;color:var(--sub);padding:40px 0}
+</style>
+</head>
+<body>
+<header><h1>PriceWatch</h1><span class="upd" id="upd"></span><button class="btn" id="re" aria-label="再読み込み">↻</button></header>
+<main id="list"><div class="empty">読み込み中…</div></main>
+<script>
+const yen=n=>n==null?'—':n.toLocaleString('ja-JP')+'円';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const COLORS=['#b23a48','#2f6fb3','#1e7a46','#8e5bb5'];
+function chart(it){
+  const all=it.shops.flatMap(s=>s.history.map(h=>h.p));
+  if(!all.length)return'';
+  const now=Date.now(),t0=Math.min(...it.shops.flatMap(s=>s.history.map(h=>+new Date(h.t)))),span=Math.max(now-t0,36e5);
+  let lo=Math.min(...all),hi=Math.max(...all);if(it.target){lo=Math.min(lo,it.target);hi=Math.max(hi,it.target)}
+  const pad=(hi-lo)*.15||1000;lo-=pad;hi+=pad;
+  const W=600,H=90,x=t=>((t-t0)/span)*W,y=p=>H-((p-lo)/(hi-lo))*H;
+  let g='';
+  if(it.target)g+=`<line x1="0" x2="${W}" y1="${y(it.target)}" y2="${y(it.target)}" stroke="var(--goal)" stroke-dasharray="6 5" stroke-width="1.5"/>`;
+  it.shops.forEach((s,i)=>{if(!s.history.length)return;let d='';
+    s.history.forEach((h,j)=>{const X=x(+new Date(h.t)),Y=y(h.p);d+=(j?`H${X}V${Y}`:`M${X} ${Y}`)});
+    d+=`H${W}`;g+=`<path d="${d}" fill="none" stroke="${COLORS[i%4]}" stroke-width="2.5" stroke-linejoin="round"/>`});
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`;
+}
+function render(d){
+  document.getElementById('upd').textContent=d.updated?('更新 '+d.updated.slice(5,16).replace('T',' ')):'';
+  const L=document.getElementById('list');
+  if(!d.items||!d.items.length){L.innerHTML='<div class="empty">商品がありません</div>';return}
+  L.innerHTML=d.items.map(it=>{
+    const ok=it.shops.filter(s=>s.price!=null),best=ok.sort((a,b)=>a.price-b.price)[0];
+    const low=Math.min(...it.shops.flatMap(s=>s.history.map(h=>h.p)));
+    let tag='';
+    if(best&&it.target)tag=best.price<=it.target?'<span class="tag goal">🎯 目標到達</span>':`<span class="tag">目標まで ${yen(best.price-it.target)}</span>`;
+    const rows=it.shops.map((s,i)=>{const h=s.history,prev=h.length>1?h[h.length-2].p:null;
+      let diff='';if(s.price!=null&&prev!=null&&h[h.length-1].p===s.price){const v=s.price-prev;diff=`<span class="d ${v<0?'down':'up'}">${v<0?'▼':'▲'}${yen(Math.abs(v))}</span>`}
+      return `<a class="shop" href="${esc(s.url)}" target="_blank" rel="noopener"><span style="color:${COLORS[i%4]}">●</span><span class="sn">${esc(s.shop)}${s.error?`<br><span class="err">${esc(s.error)}</span>`:''}</span>${diff}<span class="sp">${yen(s.price)}</span></a>`}).join('');
+    return `<div class="card"><div class="name">${esc(it.name)}</div>
+      <div class="best"><span class="big">${best?yen(best.price):'—'}</span>${tag}</div>
+      <div class="sub">${best?esc(best.shop)+'が最安':''}${isFinite(low)?' ・ 記録上の最安 '+yen(low):''}${it.target?' ・ 目標 '+yen(it.target):''}</div>
+      ${chart(it)}${rows}</div>`}).join('');
+}
+async function load(){
+  const b=document.getElementById('re');b.textContent='…';
+  try{const r=await fetch('data.json?'+Date.now());const d=await r.json();render(d);localStorage.setItem('pw',JSON.stringify(d))}
+  catch(e){try{render(JSON.parse(localStorage.getItem('pw')))}catch(_){document.getElementById('list').innerHTML='<div class="empty">データを読めませんでした</div>'}}
+  b.textContent='↻';
+}
+document.getElementById('re').onclick=load;load();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>

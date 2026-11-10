@@ -1,0 +1,61 @@
+name: 価格チェック
+
+on:
+  schedule:
+    # だいたい2時間ごと（GitHubの都合で遅れることがあります）
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ["history/**"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: 価格を取得
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          mkdir -p _site
+          cp index.html sw.js manifest.json icon-192.png icon-512.png apple-touch-icon.png _site/
+          python watch.py _site/data.json
+
+      - name: 価格の履歴を保存
+        run: |
+          git config user.name "pricewatch-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history
+          git diff --cached --quiet || git commit -m "価格の記録を更新"
+          git push
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: スマホ用ページを公開
+        id: deployment
+        uses: actions/deploy-pages@v4
