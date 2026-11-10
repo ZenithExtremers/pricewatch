@@ -1,0 +1,24 @@
+name: debug
+on: [push]
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install requests playwright && python -m playwright install --with-deps chromium >/dev/null
+      - run: |
+          cat > d.py <<'PY'
+          import requests,re
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+          r=requests.get("https://kakaku.com/item/K0001771906/",headers={"User-Agent":UA},timeout=30)
+          r.encoding=r.apparent_encoding;h=r.text
+          for m in re.finditer("ケーズ",h):
+              print("KK>>",re.sub(r"\s+"," ",h[m.start()-300:m.start()+900]));print("----")
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b=p.chromium.launch();pg=b.new_page(user_agent=UA,locale="ja-JP")
+              try:
+                  pg.goto("https://www.ksdenki.com/shop/g/g4549995661996/",timeout=45000)
+                  t=pg.inner_text("body");i=t.find("Web価格");print("PW>>",pg.title(),t[i-50:i+120])
+              except Exception as e: print("PW err",e)
+          PY
+          python d.py
