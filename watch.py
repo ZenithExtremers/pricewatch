@@ -12,6 +12,7 @@ import requests
 ROOT = Path(__file__).resolve().parent
 HIST = ROOT / "history"
 JST = timezone(timedelta(hours=9))
+MIN_DROP = 500  # これ以上下がったときだけ通知（目標到達は金額に関係なく通知）
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/130.0 Safari/537.36")
 
@@ -115,14 +116,21 @@ def main():
                 else:
                     rec[-1]["last"] = now  # 同じ値は記録を増やさず確認時刻だけ更新
                 tgt = it.get("target")
-                if prev is not None and price < prev:
+                noti = h.setdefault("_notified", {})  # 最後に通知した価格（ここから測る）
+                base = noti.get(s["shop"], prev)
+                if base is not None and price < base:
                     hit = bool(tgt and price <= tgt)
-                    notify(f"{'🎯目標到達！' if hit else '値下げ'} {it['name']}",
-                           f"{s['shop']}: {yen(prev)} → {yen(price)}（-{yen(prev - price)}）"
-                           + ("\n過去最安！" if low is None or price < low else ""),
-                           high=hit, url=s.get("link", s["url"]))
-                elif prev is not None and price > prev:
-                    print(f"値上げ {s['shop']}: {prev} → {price}")
+                    was_hit = bool(tgt and base <= tgt)
+                    if base - price >= MIN_DROP or (hit and not was_hit):
+                        notify(f"{'🎯目標到達！' if hit else '値下げ'} {it['name']}",
+                               f"{s['shop']}: {yen(base)} → {yen(price)}（-{yen(base - price)}）"
+                               + ("\n過去最安！" if low is None or price < low else ""),
+                               high=hit, url=s.get("link", s["url"]))
+                        noti[s["shop"]] = price
+                    else:
+                        print(f"小さな値下げ（通知なし） {s['shop']}: {base} → {price}")
+                elif base is None or price > base:
+                    noti[s["shop"]] = price  # 値上がりしたら、そこを新しい基準にする
             else:
                 print(f"{it['name']} / {s['shop']}: {err}")
             shops_out.append({"shop": s["shop"], "url": s.get("link", s["url"]), "price": price, "error": err,
